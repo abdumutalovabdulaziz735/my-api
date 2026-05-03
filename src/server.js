@@ -17,8 +17,16 @@ app.use(express.json());
 app.get('/api/v1/products', (req, res) => {
     const products = db.get('products').value();
     const ordering = req.query.ordering;
-    
+    const search = req.query.search;
+
     let sorted = [...products];
+
+    if (search) {
+        sorted = sorted.filter(p => 
+            p.title.toLowerCase().includes(search.toLowerCase())
+        );
+    }
+
     if (ordering === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title));
     if (ordering === 'price') sorted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
     if (ordering === 'rating') sorted.sort((a, b) => b.rating - a.rating);
