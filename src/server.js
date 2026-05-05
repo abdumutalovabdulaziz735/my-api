@@ -18,19 +18,15 @@ app.get('/api/v1/products', (req, res) => {
     const products = db.get('products').value();
     const ordering = req.query.ordering;
     const search = req.query.search;
-
     let sorted = [...products];
-
     if (search) {
         sorted = sorted.filter(p => 
             p.title.toLowerCase().includes(search.toLowerCase())
         );
     }
-
     if (ordering === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title));
     if (ordering === 'price') sorted.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
     if (ordering === 'rating') sorted.sort((a, b) => b.rating - a.rating);
-
     res.json({
         count: sorted.length,
         next: null,
@@ -41,19 +37,16 @@ app.get('/api/v1/products', (req, res) => {
 
 app.post('/api/v1/auth/register', async (req, res) => {
     const { username, email, password, password2 } = req.body;
-
     if (!username || !email || !password || !password2) {
         return res.status(400).json({ error: 'All fields are required' });
     }
     if (password !== password2) {
         return res.status(400).json({ error: 'Passwords do not match' });
     }
-
     const existingUser = db.get('users').find({ username }).value();
     if (existingUser) {
         return res.status(400).json({ error: 'Username already exists' });
     }
-
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = {
         id: Date.now(),
@@ -61,28 +54,51 @@ app.post('/api/v1/auth/register', async (req, res) => {
         email,
         password: hashedPassword
     };
-
     db.get('users').push(newUser).write();
     res.status(201).json({ message: 'User registered successfully' });
 });
 
 app.post('/api/v1/auth/login', async (req, res) => {
     const { username, password } = req.body;
-
     const user = db.get('users').find({ username }).value();
     if (!user) {
         return res.status(401).json({ error: 'Invalid username or password' });
     }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
         return res.status(401).json({ error: 'Invalid username or password' });
     }
-
     const access = jwt.sign({ id: user.id, username }, SECRET, { expiresIn: '3d' });
     const refresh = jwt.sign({ id: user.id }, SECRET, { expiresIn: '7d' });
-
     res.json({ access, refresh, user: { id: user.id, username, email: user.email } });
+});
+
+
+app.get('/api/v1/auth/users/profile', (req, res) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ detail: 'Authentication credentials were not provided.' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    try {
+        const decoded = jwt.verify(token, SECRET);
+        const user = db.get('users').find({ id: decoded.id }).value();
+
+        if (!user) {
+            return res.status(404).json({ detail: 'User not found.' });
+        }
+
+        res.json({
+            id: user.id,
+            username: user.username,
+            email: user.email,
+        });
+    } catch (error) {
+        res.status(401).json({ detail: 'Invalid or expired token.' });
+    }
 });
 
 app.get('/api/v1/users', (req, res) => {
